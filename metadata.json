@@ -1,0 +1,7 @@
+{
+  "name": "Pump.fun LaunchGuard",
+  "description": "Mobile-first Solana new-launch sniper and real-time risk guardian with automated safety verification and Safari controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
