@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Lock, KeyRound, AlertCircle, LogOut } from 'lucide-react';
+import { X, Lock, Mail, AlertCircle, LogOut } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -18,7 +18,8 @@ export function AuthModal({
   onLoginSuccess,
   onLogoutSuccess,
 }: AuthModalProps) {
-  const [passcode, setPasscode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,13 +34,14 @@ export function AuthModal({
       const res = await fetch('/api/bot/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passcode }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Authentication failed');
       } else {
-        setPasscode('');
+        setEmail('');
+        setPassword('');
         onLoginSuccess();
         onClose();
       }
@@ -92,24 +94,28 @@ export function AuthModal({
         ) : (
           <form onSubmit={handleSubmit} className="py-4 space-y-4">
             <p className="text-xs text-slate-400 leading-relaxed">
-              Enter your secure LaunchGuard owner passcode to modify live risk rules or enable automated sniper orders. Default demo passcode: <span className="font-mono text-cyan-400">guard2026</span>
+              Sign in with your Supabase owner account to modify live risk rules or enable automated sniper orders.
             </p>
 
             <div>
               <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
-                Owner Passcode
+                Owner Email
               </label>
               <div className="relative">
                 <input
-                  type="password"
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  placeholder="Enter passcode..."
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="owner@example.com"
                   className="w-full h-11 px-3 pl-9 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                   autoFocus
                 />
-                <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
               </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">Password</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password..." className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
             </div>
 
             {error && (
@@ -121,7 +127,7 @@ export function AuthModal({
 
             <button
               type="submit"
-              disabled={loading || !passcode.trim()}
+              disabled={loading || !email.trim() || !password}
               className="w-full min-h-[44px] py-2 text-xs font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 rounded-xl transition-colors shadow-sm"
             >
               {loading ? 'Authenticating...' : 'Sign In as Owner'}

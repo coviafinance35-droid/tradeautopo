@@ -13,6 +13,8 @@
     "@google/genai": "^2.4.0",
     "@hookform/resolvers": "^5.2.1",
     "@solana/web3.js": "^1.95.8",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "autoprefixer": "^10.4.21",
     "bs58": "^6.0.0",
     "class-variance-authority": "^0.7.1",
