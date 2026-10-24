@@ -33,16 +33,8 @@ export function SparklineChart({
 
   const chartData = React.useMemo(() => {
 
-    // If no history, generate clean baseline
     if (!priceHistory || priceHistory.length === 0) {
-      return [
-        { label: 'Entry', price: entryPrice, pctChange: 0 },
-        {
-          label: 'Current',
-          price: currentPrice || entryPrice,
-          pctChange: entryPrice > 0 ? (((currentPrice || entryPrice) - entryPrice) / entryPrice) * 100 : 0,
-        },
-      ];
+      return [];
     }
 
     if (priceHistory.length === 1) {
@@ -69,14 +61,13 @@ export function SparklineChart({
   const strokeColor = isProfit ? '#34d399' : '#fb7185';
   const gradientId = `sparkline-grad-${symbol}-${isProfit ? 'up' : 'down'}`;
 
-  if (!isMounted) {
+  if (!isMounted || chartData.length === 0) {
     return (
       <div className="w-full h-14 bg-slate-950/30 rounded-xl flex items-center justify-center text-[10px] text-slate-600">
-        Loading chart...
+        Awaiting live price history
       </div>
     );
   }
-
 
   // Calculate min and max for proper vertical padding
   const prices = chartData.map((d) => d.price);

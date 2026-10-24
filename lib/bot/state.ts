@@ -29,7 +29,7 @@ const STATE_FILE_PATH = path.join(process.cwd(), 'data', 'launchguard_state.json
 // Default initial risk configuration
 const DEFAULT_SETTINGS: RiskSettings = {
   autoBuyEnabled: false,
-  tradingMode: 'simulation',
+  tradingMode: 'live',
   maxBuySol: 0.05,
   maxOpenExposureSol: 0.25,
   maxConcurrentPositions: 3,
@@ -49,8 +49,8 @@ const DEFAULT_SETTINGS: RiskSettings = {
 };
 
 class LaunchGuardEngine {
-  private botState: BotState = 'MONITORING';
-  private tradingMode: TradingMode = 'simulation';
+  private botState: BotState = 'STOPPED';
+  private tradingMode: TradingMode = 'live';
   private autoBuyEnabled: boolean = false;
   private emergencyStopped: boolean = false;
   private settings: RiskSettings = { ...DEFAULT_SETTINGS };
@@ -67,15 +67,14 @@ class LaunchGuardEngine {
     'SerialDumper11111111111111111111111111111111',
   ]);
 
-  // Simulation wallet
-  private simWallet: WalletInfo = {
-    publicKey: 'GuaRdSiM111111111111111111111111111111111111',
-    availableSol: 1.50,
-    reservedSol: 0.05,
-    totalSol: 1.55,
-    isSimulated: true,
-    hasDedicatedSigner: true,
-    cluster: 'simulation',
+  private wallet: WalletInfo = {
+    publicKey: '',
+    availableSol: 0,
+    reservedSol: 0,
+    totalSol: 0,
+    isSimulated: false,
+    hasDedicatedSigner: false,
+    cluster: 'mainnet-beta',
   };
 
   private liveWalletPublicKey: string = '';
@@ -86,8 +85,9 @@ class LaunchGuardEngine {
   constructor() {
     this.initWalletFromEnv();
     this.loadState();
-    this.seedInitialLaunchesIfEmpty();
-    this.startEngineLoop();
+    if (this.liveWalletHasSigner) {
+      this.startEngineLoop();
+    }
   }
 
   private initWalletFromEnv() {
@@ -105,7 +105,7 @@ class LaunchGuardEngine {
         this.liveWalletHasSigner = true;
         this.addAuditLog('SECURITY', 'Trading Key Loaded', `Initialized trading signer: ${this.liveWalletPublicKey.slice(0, 4)}...${this.liveWalletPublicKey.slice(-4)}`, 'info');
       } catch (err) {
-        this.addAuditLog('SECURITY', 'Invalid Trading Key', 'Configured TRADING_WALLET_PRIVATE_KEY failed verification. Reverting to simulation wallet.', 'error');
+        this.addAuditLog('SECURITY', 'Invalid Trading Key', 'Configured TRADING_WALLET_PRIVATE_KEY failed verification. No wallet is available until a valid trading signer is configured.', 'error');
       }
     }
   }
@@ -118,7 +118,7 @@ class LaunchGuardEngine {
         if (data.settings) this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
         if (data.positions) this.positions = data.positions;
         if (data.auditLogs) this.auditLogs = data.auditLogs.slice(-100);
-        if (data.simWallet) this.simWallet = data.simWallet;
+        if (data.wallet) this.wallet = data.wallet;
         if (data.emergencyStopped !== undefined) this.emergencyStopped = data.emergencyStopped;
         if (data.tradingMode) this.tradingMode = data.tradingMode;
         // Never automatically enable autoBuy or live trading on restart (Safety Invariant)
@@ -141,7 +141,7 @@ class LaunchGuardEngine {
         settings: this.settings,
         positions: this.positions,
         auditLogs: this.auditLogs.slice(-100),
-        simWallet: this.simWallet,
+        wallet: this.wallet,
         emergencyStopped: this.emergencyStopped,
         tradingMode: this.tradingMode,
         savedAt: Date.now(),
@@ -170,7 +170,7 @@ class LaunchGuardEngine {
           hasDedicatedSigner: true,
           cluster: 'mainnet-beta',
         }
-      : this.simWallet;
+      : this.wallet;
 
     // Daily loss is tracked from realized negative PnL today
     const dailyLossSol = Math.max(0, -realizedPnl);
@@ -334,10 +334,10 @@ class LaunchGuardEngine {
     pos.exitReason = reason;
     pos.exitTxSignature = `sim_exit_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
 
-    // Return funds to simulation wallet
+    // Return funds to the connected wallet
     if (pos.isSimulated) {
-      this.simWallet.availableSol += returnSol;
-      this.simWallet.totalSol = this.simWallet.availableSol + this.simWallet.reservedSol;
+      this.wallet.availableSol += returnSol;
+      this.wallet.totalSol = this.wallet.availableSol + this.wallet.reservedSol;
     }
 
     this.addAuditLog(
@@ -398,8 +398,8 @@ class LaunchGuardEngine {
 
     // Evaluate risk
     const activeWallet = this.tradingMode === 'live' && this.liveWalletHasSigner
-      ? { ...this.simWallet, isSimulated: false, cluster: 'mainnet-beta' as const }
-      : this.simWallet;
+      ? { ...this.wallet, isSimulated: false, cluster: 'mainnet-beta' as const }
+      : this.wallet;
 
     const riskEval = evaluateLaunchRisk(launch, {
       settings: { ...this.settings, maxBuySol: buySol },
@@ -437,13 +437,13 @@ class LaunchGuardEngine {
 
       // Invariant: verify wallet balance before deduction
       if (isSim) {
-        if (this.simWallet.availableSol < buySol) {
+        if (this.wallet.availableSol < buySol) {
           launch.status = 'failed';
-          launch.executionError = 'Insufficient balance in simulation wallet';
+          launch.executionError = 'Insufficient balance in connected wallet';
           return { success: false, error: 'Insufficient balance' };
         }
-        this.simWallet.availableSol -= buySol;
-        this.simWallet.totalSol = this.simWallet.availableSol + this.simWallet.reservedSol;
+        this.wallet.availableSol -= buySol;
+        this.wallet.totalSol = this.wallet.availableSol + this.wallet.reservedSol;
       }
 
       const txSig = `sim_tx_${Math.random().toString(36).substring(2, 14)}_${Date.now()}`;
@@ -503,13 +503,6 @@ class LaunchGuardEngine {
     // 1. Update Open Positions Price & Check TP/SL
     const openPositions = this.positions.filter(p => p.status === 'OPEN');
     for (const pos of openPositions) {
-      // Simulate micro price movements (fluctuating according to bonding curve volatility)
-      const randomDrift = (Math.random() - 0.48) * 0.04; // slight upward drift for exciting testability
-      pos.currentPriceSol = Math.max(0.000000001, pos.currentPriceSol * (1 + randomDrift));
-      pos.currentValueSol = pos.amountTokens * pos.currentPriceSol;
-      pos.unrealizedPnlSol = pos.currentValueSol - pos.costSol;
-      pos.unrealizedPnlPercent = ((pos.currentValueSol - pos.costSol) / pos.costSol) * 100;
-      pos.priceHistory.push({ timestamp: Date.now(), price: pos.currentPriceSol });
       if (pos.priceHistory.length > 25) pos.priceHistory.shift();
 
       // Check Automatic Exit Rules: Take Profit & Stop Loss
@@ -520,202 +513,7 @@ class LaunchGuardEngine {
       }
     }
 
-    // 2. Simulate Incoming Pump.fun Launches
-    if (this.botState === 'MONITORING' && !this.emergencyStopped) {
-      // 35% chance per tick to detect a newly launched token
-      if (Math.random() < 0.35) {
-        this.generateSimulatedLaunch();
-      }
-    }
-  }
-
-  private generateSimulatedLaunch() {
-    const mintKp = Keypair.generate();
-    const [pda] = getBondingCurvePDA(mintKp.publicKey);
-
-    // Dynamic token names representing Pump.fun meme culture
-    const tokenNames = [
-      { name: 'Solana Guard', symbol: 'GUARD' },
-      { name: 'Turbo Doge', symbol: 'TDOGE' },
-      { name: 'Quantum Cat', symbol: 'QCAT' },
-      { name: 'Based Pepe', symbol: 'BPEPE' },
-      { name: 'Shadow Terminal', symbol: 'SHADOW' },
-      { name: 'Cyber Gorilla', symbol: 'GORIL' },
-      { name: 'Neon Frog', symbol: 'NFROG' },
-      { name: 'Alpha Runner', symbol: 'RUNNER' },
-      { name: 'Rug Buster', symbol: 'BUSTER' },
-      { name: 'Helius Speed', symbol: 'SPEED' },
-      { name: 'Lunar Vault', symbol: 'VAULT' },
-      { name: 'Degen Sniper', symbol: 'DSNIP' },
-    ];
-    const picked = tokenNames[Math.floor(Math.random() * tokenNames.length)];
-    const salt = Math.floor(Math.random() * 900 + 100);
-    const symbol = `${picked.symbol}${salt}`;
-    const name = `${picked.name} #${salt}`;
-
-    // Generate diverse profiles: 60% rejected (scams, wash, high holding), 40% clean
-    const isCleanLaunch = Math.random() > 0.60;
-    const isVolumeSpike = Math.random() < 0.20;
-
-    const creatorKp = Keypair.generate();
-    const creatorHoldingPct = isCleanLaunch
-      ? parseFloat((Math.random() * 8 + 1).toFixed(1))
-      : parseFloat((Math.random() * 45 + 16).toFixed(1)); // high holding for scams
-
-    const uniqueBuyers = isCleanLaunch
-      ? Math.floor(Math.random() * 8 + 4)
-      : Math.floor(Math.random() * 2 + 1); // single wallet wash
-
-    const volume5m = isVolumeSpike
-      ? parseFloat((Math.random() * 4 + 2.5).toFixed(2))
-      : parseFloat((Math.random() * 0.8 + 0.1).toFixed(2));
-
-    const launch: TokenLaunch = {
-      mint: mintKp.publicKey.toBase58(),
-      name,
-      symbol,
-      creator: creatorKp.publicKey.toBase58(),
-      creationTime: Date.now(),
-      bondingCurveAddress: pda.toBase58(),
-      virtualSolReserves: INITIAL_VIRTUAL_SOL_RESERVES,
-      virtualTokenReserves: INITIAL_VIRTUAL_TOKEN_RESERVES,
-      realSolReserves: 0,
-      priceSol: calculateTokenPriceSol(INITIAL_VIRTUAL_SOL_RESERVES, INITIAL_VIRTUAL_TOKEN_RESERVES),
-      marketCapSol: 30,
-      uniqueBuyersCount: uniqueBuyers,
-      txCount: uniqueBuyers + Math.floor(Math.random() * 5),
-      creatorHoldingPct,
-      isCreatorHistoryKnown: Math.random() > 0.3,
-      creatorPreviousLaunches: Math.floor(Math.random() * 4),
-      creatorRugCount: isCleanLaunch ? 0 : (Math.random() > 0.7 ? 1 : 0),
-      volume5mSol: volume5m,
-      volumeSpike: isVolumeSpike,
-      spikeMultiplier: isVolumeSpike ? parseFloat((volume5m / 0.5).toFixed(1)) : undefined,
-      status: 'evaluating',
-      detectedAt: Date.now(),
-      isSimulated: true,
-    };
-
-    // Evaluate with Risk Engine
-    const activeWallet = this.tradingMode === 'live' && this.liveWalletHasSigner
-      ? { ...this.simWallet, isSimulated: false, cluster: 'mainnet-beta' as const }
-      : this.simWallet;
-
-    const evalResult = evaluateLaunchRisk(launch, {
-      settings: this.settings,
-      wallet: activeWallet,
-      metrics: this.getSummary().metrics,
-      openPositions: this.positions.filter(p => p.status === 'OPEN'),
-      lastTradeTime: this.lastTradeTime,
-      knownBadCreators: this.knownBadCreators,
-    });
-
-    launch.riskEvaluation = evalResult;
-
-    if (evalResult.decision === 'REJECTED') {
-      launch.status = 'rejected';
-      this.addAuditLog(
-        'RISK_DECISION',
-        `Launch Rejected: ${launch.symbol}`,
-        `Score: ${evalResult.score}/100. Reasons: ${evalResult.rejectionReasons.join(' | ')}`,
-        'warn',
-        launch.mint
-      );
-    } else {
-      launch.status = 'eligible';
-      this.addAuditLog(
-        'RISK_DECISION',
-        `Launch Approved: ${launch.symbol}`,
-        `Score: ${evalResult.score}/100 (${evalResult.riskLevel}). All 8 safety conditions met.`,
-        'info',
-        launch.mint
-      );
-
-      // Automated Buying Execution (if AutoBuy enabled)
-      if (this.autoBuyEnabled && !this.emergencyStopped) {
-        this.processBuyExecution(launch, this.settings.maxBuySol);
-      }
-    }
-
-    // Volume Spike Alert Trigger
-    if (isVolumeSpike) {
-      const alert: VolumeSpikeAlert = {
-        id: `alert_${Date.now()}_${launch.symbol}`,
-        mint: launch.mint,
-        symbol: launch.symbol,
-        name: launch.name,
-        surgeMultiplier: launch.spikeMultiplier || 3.2,
-        currentVolumeSol: volume5m,
-        baselineVolumeSol: 0.5,
-        timestamp: Date.now(),
-        priceSol: launch.priceSol,
-        priceChangePct: 24.5,
-      };
-      this.volumeAlerts.unshift(alert);
-      if (this.volumeAlerts.length > 30) this.volumeAlerts.pop();
-
-      this.addAuditLog(
-        'VOLUME_SPIKE',
-        `Volume Spike Alert: ${launch.symbol}`,
-        `Sudden surge of ${alert.surgeMultiplier}x baseline volume detected (${volume5m} SOL in 5m).`,
-        'info',
-        launch.mint
-      );
-    }
-
-    this.launches.unshift(launch);
-    if (this.launches.length > 50) this.launches.pop();
-  }
-
-  private seedInitialLaunchesIfEmpty() {
-    if (this.launches.length === 0) {
-      for (let i = 0; i < 6; i++) {
-        this.generateSimulatedLaunch();
-      }
-    }
-
-    if (this.positions.length === 0) {
-      const now = Date.now();
-      const basePrice = 0.000000028;
-      const history = [
-        { timestamp: now - 36000, price: basePrice },
-        { timestamp: now - 32000, price: basePrice * 1.025 },
-        { timestamp: now - 28000, price: basePrice * 1.06 },
-        { timestamp: now - 24000, price: basePrice * 1.04 },
-        { timestamp: now - 20000, price: basePrice * 1.09 },
-        { timestamp: now - 16000, price: basePrice * 1.135 },
-        { timestamp: now - 12000, price: basePrice * 1.11 },
-        { timestamp: now - 8000, price: basePrice * 1.16 },
-        { timestamp: now - 4000, price: basePrice * 1.195 },
-        { timestamp: now, price: basePrice * 1.228 },
-      ];
-      const curPrice = history[history.length - 1].price;
-      const amountTokens = 1785714;
-      const costSol = 0.05;
-      const curVal = amountTokens * curPrice;
-
-      this.positions.push({
-        id: `pos_seed_guard_${now}`,
-        mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b96nnm3v',
-        symbol: 'GUARD',
-        name: 'Solana Guard',
-        amountTokens,
-        entryPriceSol: basePrice,
-        currentPriceSol: curPrice,
-        costSol,
-        currentValueSol: curVal,
-        unrealizedPnlSol: curVal - costSol,
-        unrealizedPnlPercent: ((curVal - costSol) / costSol) * 100,
-        realizedPnlSol: 0,
-        status: 'OPEN',
-        openedAt: now - 40000,
-        entryTxSignature: 'sim_tx_guard_seed_initial',
-        takeProfitPercent: this.settings.takeProfitPct,
-        stopLossPercent: this.settings.stopLossPct,
-        isSimulated: true,
-        priceHistory: history,
-      });
-    }
+    // Launches are populated only by the connected Solana event source.
   }
 
 
