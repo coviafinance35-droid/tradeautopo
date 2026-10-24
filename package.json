@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "clean": "next clean"
+    "clean": "next clean",
+    "bot:cli": "bun run scripts/bot-cli.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

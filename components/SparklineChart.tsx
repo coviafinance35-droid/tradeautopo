@@ -56,7 +56,7 @@ export function SparklineChart({
         pctChange: pct,
       };
     });
-  }, [priceHistory, entryPrice, currentPrice]);
+  }, [priceHistory, entryPrice]);
 
   const strokeColor = isProfit ? '#34d399' : '#fb7185';
   const gradientId = `sparkline-grad-${symbol}-${isProfit ? 'up' : 'down'}`;
