@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { BottomNav, NavTab } from '@/components/BottomNav';
-import { SimulationBanner } from '@/components/SimulationBanner';
 import { VolumeSpikeBanner } from '@/components/VolumeSpikeBanner';
 import { RadarView } from '@/components/RadarView';
 import { PositionsView } from '@/components/PositionsView';
@@ -243,14 +242,6 @@ export default function Home() {
         isAuthenticated={isAuthenticated}
       />
 
-      {/* Mode & Emergency Banner */}
-      <SimulationBanner
-        mode={summary?.tradingMode || 'simulation'}
-        emergencyStopped={Boolean(summary?.emergencyStopped)}
-        onClearEmergency={handleResumeEmergency}
-        onSwitchModeRequest={() => setCurrentTab('docs')}
-      />
-
       {/* Main Content Area with Bottom Padding for Floating Tab Bar */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-4 pb-28">
         {/* Real-time Volume Spike Alert Banner */}
@@ -291,7 +282,7 @@ export default function Home() {
             }}
             onClosePosition={handleClosePosition}
             isClosing={isClosingPosition}
-            tradingMode={summary?.tradingMode || 'simulation'}
+            tradingMode={summary?.tradingMode || 'live'}
           />
         )}
 

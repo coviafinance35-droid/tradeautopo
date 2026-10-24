@@ -170,7 +170,7 @@ export function SniperView({
           {isExecuting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Simulating Pre-flight & Sniping...</span>
+              <span>Running pre-flight checks...</span>
             </>
           ) : (
             <>
