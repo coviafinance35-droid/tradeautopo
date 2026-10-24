@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Radar, Briefcase, ShieldCheck, Crosshair, FileText } from 'lucide-react';
+import { Radar, Briefcase, ShieldCheck, Crosshair, FileText, Copy } from 'lucide-react';
 
-export type NavTab = 'radar' | 'positions' | 'risk' | 'sniper' | 'docs';
+export type NavTab = 'radar' | 'positions' | 'risk' | 'sniper' | 'copy' | 'docs';
 
 interface BottomNavProps {
   currentTab: NavTab;
@@ -42,6 +42,11 @@ export function BottomNav({
       icon: Crosshair,
     },
     {
+      id: 'copy' as NavTab,
+      label: 'Copy Trade',
+      icon: Copy,
+    },
+    {
       id: 'docs' as NavTab,
       label: 'System & Docs',
       icon: FileText,
@@ -50,7 +55,7 @@ export function BottomNav({
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#090d16]/95 backdrop-blur-md border-t border-slate-800/80 pb-safe transition-all">
-      <div className="max-w-md mx-auto grid grid-cols-5 items-center h-16 px-1">
+      <div className="max-w-md mx-auto grid grid-cols-6 items-center h-16 px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
