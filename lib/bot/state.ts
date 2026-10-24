@@ -273,10 +273,19 @@ class LaunchGuardEngine {
     return { success: true };
   }
 
-  public setBotState(state: BotState): { success: boolean } {
+  public setBotState(state: BotState): { success: boolean; error?: string } {
+    if (state === 'EXECUTING' && (this.emergencyStopped || !this.autoBuyEnabled)) {
+      return { success: false, error: 'Execution requires auto-buy enabled and emergency stop cleared.' };
+    }
     this.botState = state;
     this.addAuditLog('EXECUTION', 'Bot State Changed', `Bot execution state updated to: ${state}`, 'info');
+    this.persistState();
     return { success: true };
+  }
+
+  public runCycle(): { success: boolean; state: BotState; lastEventTime: number } {
+    this.tick();
+    return { success: true, state: this.botState, lastEventTime: this.lastEventTime };
   }
 
   /**
