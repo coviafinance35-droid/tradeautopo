@@ -26,7 +26,11 @@ export function CopyTradeView() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load() }, 0)
-    return () => window.clearTimeout(timer)
+    const poller = window.setInterval(() => { void load() }, 10000)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearInterval(poller)
+    }
   }, [])
 
   async function save() {

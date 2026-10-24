@@ -85,9 +85,9 @@ class LaunchGuardEngine {
   constructor() {
     this.initWalletFromEnv();
     this.loadState();
-    if (this.liveWalletHasSigner) {
-      this.startEngineLoop();
-    }
+    // Monitoring stays autonomous even when execution is unavailable. Live
+    // signing remains separately gated by the configured trading key.
+    this.startEngineLoop();
   }
 
   private initWalletFromEnv() {
@@ -341,7 +341,7 @@ class LaunchGuardEngine {
     pos.currentValueSol = returnSol;
     pos.realizedPnlSol = realizedPnlSol;
     pos.exitReason = reason;
-    pos.exitTxSignature = `sim_exit_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+    pos.exitTxSignature = `sim_exit_${crypto.randomUUID()}`;
 
     // Return funds to the connected wallet
     if (pos.isSimulated) {
@@ -455,7 +455,7 @@ class LaunchGuardEngine {
         this.wallet.totalSol = this.wallet.availableSol + this.wallet.reservedSol;
       }
 
-      const txSig = `sim_tx_${Math.random().toString(36).substring(2, 14)}_${Date.now()}`;
+      const txSig = `sim_tx_${crypto.randomUUID()}`;
       launch.status = 'confirmed';
       launch.executionTxSignature = txSig;
 
@@ -534,7 +534,7 @@ class LaunchGuardEngine {
     mint?: string
   ) {
     const entry: AuditLogEntry = {
-      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: `audit_${crypto.randomUUID()}`,
       timestamp: Date.now(),
       category,
       title,
