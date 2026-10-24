@@ -11,6 +11,7 @@ import { SniperView } from '@/components/SniperView';
 import { DocsView } from '@/components/DocsView';
 import { RiskDetailModal } from '@/components/RiskDetailModal';
 import { AuthModal } from '@/components/AuthModal';
+import { CopyTradeView } from '@/components/CopyTradeView';
 import {
   BotStateSummary,
   TokenLaunch,
@@ -304,6 +305,8 @@ export default function Home() {
             defaultBuySol={summary.settings.maxBuySol}
           />
         )}
+
+        {currentTab === 'copy' && <CopyTradeView />}
 
         {currentTab === 'docs' && summary && (
           <DocsView

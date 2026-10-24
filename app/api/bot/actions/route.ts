@@ -10,8 +10,20 @@ export async function POST(request: NextRequest) {
     const engine = getEngine();
 
     switch (body.action) {
-      case 'run_cycle':
-        return NextResponse.json(engine.runCycle());
+      case 'run_cycle': {
+        const result = engine.runCycle();
+        return NextResponse.json({ ...result, summary: engine.getSummary() });
+      }
+      case 'autonomous_tick': {
+        const result = engine.runCycle();
+        return NextResponse.json({
+          ok: result.success,
+          protocol: 'launchguard-agent-v1',
+          state: result.state,
+          lastEventTime: result.lastEventTime,
+          summary: engine.getSummary(),
+        });
+      }
       case 'start_monitoring': {
         const result = engine.setBotState('MONITORING');
         return result.success ? NextResponse.json(result) : NextResponse.json(result, { status: 400 });
